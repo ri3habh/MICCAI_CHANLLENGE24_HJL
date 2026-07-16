@@ -68,3 +68,9 @@ def build_model_mapping(dataset_json: dict, aliases: dict[str, list[str]] = VESS
         if canon is not None:
             mapping[int(model_idx)] = canon
     return mapping
+
+
+def unmapped_vessels(mapping: dict[int, int]) -> list[str]:
+    """Canonical vessel names whose 1-based canonical index is missing from mapping.values()."""
+    covered = set(mapping.values())
+    return [v for v in VESSELS if canonical_index(v) not in covered]

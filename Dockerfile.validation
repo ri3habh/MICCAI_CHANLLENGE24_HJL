@@ -8,7 +8,7 @@ COPY requirements.txt /opt/app/
 RUN python -m pip install -U pip \
     && python -m pip install -r requirements.txt \
     && python -m pip install --no-deps nnunetv2 \
-    && python -m pip install pytest tabulate
+    && python -m pip install pytest tabulate monai
 
 # Application code
 COPY nnunetv2 /opt/app/nnunetv2

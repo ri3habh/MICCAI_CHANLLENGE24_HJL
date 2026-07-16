@@ -9,12 +9,9 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
-import sys
 import time
 import traceback
 from pathlib import Path
-
-import numpy as np
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,6 +44,7 @@ def _read_seg(path: Path):
 
 def preflight(args) -> int:
     from validation.pairing import pair_cases
+    from validation.labelmap import build_model_mapping, unmapped_vessels
     resources = Path(args.resources)
 
     print("== preflight ==")
@@ -61,8 +59,19 @@ def preflight(args) -> int:
     if not ds.is_file():
         print(f"FAIL: model weights/dataset.json not found at {ds}")
         return 3
-    json.load(open(ds))
+    with open(ds) as fh:
+        dataset_json = json.load(fh)
     print(f"OK: weights present ({ds})")
+
+    model_mapping = build_model_mapping(dataset_json)
+    missing = unmapped_vessels(model_mapping)
+    if missing:
+        print("FAIL: model mapping is incomplete — missing canonical vessels: "
+              + ", ".join(missing))
+        print("      Extend VESSEL_ALIASES in validation/labelmap.py and complete "
+              "the real-data verification.")
+        return 6
+    print("OK: model mapping covers all 9 canonical vessels")
 
     try:
         cases = pair_cases(Path(args.images), Path(args.labels),
@@ -80,15 +89,11 @@ def preflight(args) -> int:
 
 def run(args) -> int:
     from validation.pairing import pair_cases
-    from validation.inference import predict_case
     from validation.labelmap import (
-        build_model_mapping, remap_volume, GT_CLASS_TO_CANONICAL,
+        build_model_mapping, remap_volume, unmapped_vessels, GT_CLASS_TO_CANONICAL,
     )
-    from validation.metrics import score_case
-    from validation.report import write_reports
 
     import torch
-    from run_inference import _load_repo
 
     resources = Path(args.resources)
     outdir = Path(args.outdir)
@@ -101,11 +106,26 @@ def run(args) -> int:
     if args.limit:
         cases = cases[: args.limit]
 
-    _load_repo()
-    model_mapping = build_model_mapping(json.load(open(_resencl_dataset_json(resources))))
     if not GT_CLASS_TO_CANONICAL:
         print("ERROR: GT_CLASS_TO_CANONICAL is empty — complete Task 2 Step 6 first.")
         return 5
+
+    with open(_resencl_dataset_json(resources)) as fh:
+        dataset_json = json.load(fh)
+    model_mapping = build_model_mapping(dataset_json)
+    missing = unmapped_vessels(model_mapping)
+    if missing:
+        print("ERROR: model mapping is incomplete — missing canonical vessels: "
+              + ", ".join(missing))
+        print("       Extend VESSEL_ALIASES in validation/labelmap.py and complete "
+              "the real-data verification.")
+        return 6
+
+    from validation.inference import predict_case
+    from validation.metrics import score_case
+    from validation.report import write_reports
+    from run_inference import _load_repo
+    _load_repo()
 
     rows: list[dict] = []
     t0 = time.time()

@@ -1,6 +1,7 @@
 import numpy as np
 from validation.labelmap import (
     VESSELS, remap_volume, build_model_mapping, canonical_index, VESSEL_ALIASES,
+    unmapped_vessels,
 )
 
 
@@ -40,3 +41,15 @@ def test_build_model_mapping_matches_names_case_insensitively():
     assert mapping[7] == canonical_index("right_renal")   # 3
     assert mapping[8] == canonical_index("left_renal")    # 2
     assert 3 not in mapping  # unmatched model class excluded
+
+
+def test_unmapped_vessels_reports_missing_names():
+    mapping = {10: 1, 11: 2}  # only abdominal_aorta and left_renal covered
+    missing = unmapped_vessels(mapping)
+    assert set(missing) == set(VESSELS) - {"abdominal_aorta", "left_renal"}
+    assert len(missing) == 7
+
+
+def test_unmapped_vessels_empty_when_all_covered():
+    mapping = {i: i for i in range(1, 10)}  # model idx == canonical idx, full coverage
+    assert unmapped_vessels(mapping) == []
