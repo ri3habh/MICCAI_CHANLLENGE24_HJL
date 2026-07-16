@@ -49,6 +49,14 @@ manual QA.
   as `run_inference.run_ensemble` does. Device: `cuda`.
 - **Metrics:** Dice, HD95 (95th-percentile Hausdorff distance, in mm using voxel spacing), and
   volume difference (mL and %).
+- **Execution site:** the batch runs on a **coworker's company RTX 4090**, not on the author's
+  machine. Everything below is designed around that handoff — see "Handoff & Portability".
+- **Packaging:** a **Docker image** (the repo already ships a `Dockerfile`), so the coworker fights
+  no dependency/CUDA issues.
+- **Weights:** **bundled** into the handoff (the author downloads them once from the SJTU link);
+  the company machine needs no access to that link.
+- **Data:** the 100 labeled CTAs **live on the coworker's side**; their location is a configurable
+  mount path, not shipped in the bundle.
 
 ## Architecture
 
@@ -129,6 +137,52 @@ structures.
     Dice below a configurable threshold), and the N worst cases per vessel listed by case_id for
     manual QA in ITK-SNAP.
 
+## Handoff & Portability
+
+The person running the batch is **not** the person who built it, is on a machine the author does
+not control, and will babysit a multi-hour run. The design target is: **unzip → one command →
+send back a small folder.** Concretely:
+
+### The bundle the coworker receives
+
+- The repo code + the validation harness.
+- The **model weights baked into the Docker image** (or shipped alongside and mounted) so no
+  external download is needed.
+- A **coworker README** (`HANDOFF.md`): numbered steps, the single run command, expected runtime,
+  and exactly what to send back. No knowledge of nnU-Net or this codebase assumed.
+
+### The single run command
+
+A thin wrapper (`run_validation.py` + a `docker run` one-liner in `HANDOFF.md`) that takes just:
+
+- `--images <dir>` and `--labels <dir>` — the coworker's data (mounted into the container).
+- writes everything under one `--outdir <dir>` (also a mount).
+
+No other arguments required; sensible defaults for weights path, device (`cuda`), and ensemble
+config are baked in.
+
+### Preflight check (fails fast, before the long run)
+
+A `--preflight` mode that, in seconds, verifies and then exits:
+
+- GPU is visible inside the container (`torch.cuda.is_available()`, prints device name + VRAM).
+- Weights are present and loadable.
+- The images/labels mounts exist and pair up (reuses Component 1); prints the paired-case count.
+- Enough free disk for predictions + results.
+
+The coworker runs `--preflight` first; only on a clean pass do they launch the full batch. This
+prevents discovering a broken mount or missing GPU three hours in.
+
+### During and after the run
+
+- **Progress:** prints `case i/100` with per-case timing and an ETA, so the coworker knows it is
+  alive and roughly when it finishes.
+- **Resumable:** already in the design (Component 2). If the machine sleeps, reboots, or the
+  container is killed, re-running the same command continues where it left off.
+- **What comes back:** only the small `results/` folder (the CSVs + `summary.md` + `failures.log`)
+  needs to be returned — a few MB. The large `predictions/` volumes stay on his machine unless a
+  named worst-case is requested for QA.
+
 ## Error handling
 
 - Per-case try/except: an I/O error, shape/geometry mismatch, or inference failure logs the
@@ -143,15 +197,20 @@ structures.
   hand-computed values; the remap table; every empty-vessel branch of Component 4.
 - **Smoke test:** run the full harness end-to-end on **1–2 real cases** and eyeball the CSV before
   committing to the 100-case batch.
-- The heavy 100-case run is an operation, not a test; it is launched only after the smoke test
-  passes.
+- **Handoff dry-run:** the author builds the Docker image and runs `--preflight` (and ideally the
+  1–2 case smoke test) *inside the container* before shipping, so the coworker's first command is
+  known-good. The bundle is not sent until this passes.
+- The heavy 100-case run is an operation, not a test; the coworker launches it only after
+  `--preflight` passes on their machine.
 
 ## Deliverables
 
 1. The harness code (pairing, cached inference wrapper, remap, metrics, report).
 2. The reviewed label-mapping constant (Component 3).
-3. `results/` outputs from the full 100-case run.
-4. A short written readout of what the numbers imply for the Toralis auto-seg gap.
+3. The **handoff bundle**: Docker image with weights baked in, `run_validation.py` wrapper,
+   `--preflight` mode, and `HANDOFF.md` for the coworker.
+4. `results/` outputs from the full 100-case run (returned by the coworker).
+5. A short written readout of what the numbers imply for the Toralis auto-seg gap.
 
 ## Open questions to resolve during implementation
 
