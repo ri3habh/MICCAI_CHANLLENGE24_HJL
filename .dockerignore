@@ -1,0 +1,12 @@
+.git
+.gitignore
+.superpowers
+__pycache__
+*.pyc
+*.tar.gz
+out/
+predictions/
+.pytest_cache
+.env
+*.md
+Toralis MVP.png

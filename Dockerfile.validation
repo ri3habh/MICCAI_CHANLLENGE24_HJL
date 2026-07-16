@@ -1,0 +1,22 @@
+# Dockerfile.validation — GPU image for the AortaSeg24 validation harness.
+FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
+
+ENV PYTHONUNBUFFERED=1
+WORKDIR /opt/app
+
+COPY requirements.txt /opt/app/
+RUN python -m pip install -U pip \
+    && python -m pip install -r requirements.txt \
+    && python -m pip install --no-deps nnunetv2 \
+    && python -m pip install pytest tabulate
+
+# Application code
+COPY nnunetv2 /opt/app/nnunetv2
+COPY new_inference_code.py run_inference.py /opt/app/
+COPY validation /opt/app/validation
+COPY tests /opt/app/tests
+
+# Model weights baked in (downloaded once by the author; see HANDOFF.md).
+COPY resources /opt/app/resources
+
+ENTRYPOINT ["python", "-m", "validation.run_validation"]
