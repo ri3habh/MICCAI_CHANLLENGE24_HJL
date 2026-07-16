@@ -43,6 +43,15 @@ def test_default_aliases_resolve_all_nine_on_real_labels():
     assert 10 not in mapping and 11 not in mapping and 13 not in mapping
 
 
+def test_gt_mapping_matches_model_scheme():
+    # The GT masks were confirmed to use the identical AortaSeg24 0-23 scheme,
+    # so GT_CLASS_TO_CANONICAL must equal the resolved model mapping.
+    from validation.labelmap import GT_CLASS_TO_CANONICAL
+    model_mapping = build_model_mapping({"labels": AORTASEG24_LABELS})
+    assert GT_CLASS_TO_CANONICAL == model_mapping
+    assert unmapped_vessels(GT_CLASS_TO_CANONICAL) == []
+
+
 def test_remap_collapses_unknown_to_background():
     vol = np.array([[0, 1, 2], [3, 99, 5]], dtype=np.int16)
     mapping = {1: 1, 2: 2, 5: 4}  # 3 and 99 unmapped -> 0

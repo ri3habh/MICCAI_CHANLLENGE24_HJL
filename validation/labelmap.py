@@ -54,9 +54,22 @@ VESSEL_ALIASES: dict[str, list[str]] = {
     "right_external_iliac": ["Zone11 R", "right external iliac", "right_external_iliac"],
 }
 
-# Ground-truth integer -> canonical index. VERIFY against a real label file (Step 6);
-# these values are the AortaSeg24 default guess and MUST be confirmed before the batch.
-GT_CLASS_TO_CANONICAL: dict[int, int] = {}
+# Ground-truth integer -> canonical index. CONFIRMED against a real GT label
+# (ResampledDataInNifti/masks/subject001_label.seg.nrrd): the GT masks use the
+# identical AortaSeg24 0-23 scheme as the model (values 0..23; every left/right
+# pair verified on the correct physical side in LPS). So GT numbering == model
+# numbering, and this mirrors the model mapping (abdominal_aorta = Zone9=17 only).
+GT_CLASS_TO_CANONICAL: dict[int, int] = {
+    17: 1,  # Zone9  -> abdominal_aorta (infrarenal)
+    16: 2,  # Left Renal Artery      -> left_renal
+    15: 3,  # Right Renal Artery     -> right_renal
+    19: 4,  # Zone10 L               -> left_common_iliac
+    18: 5,  # Zone10 R               -> right_common_iliac
+    21: 6,  # Left Internal lliac    -> left_internal_iliac
+    20: 7,  # Right Internal lliac   -> right_internal_iliac
+    23: 8,  # Zone11 L               -> left_external_iliac
+    22: 9,  # Zone11 R               -> right_external_iliac
+}
 
 
 def remap_volume(vol: np.ndarray, mapping: dict[int, int]) -> np.ndarray:

@@ -36,6 +36,19 @@ def test_custom_label_template(tmp_path):
     assert cases[0].label_path == labs / "subject001_CTA_label.mha"
 
 
+def test_image_suffix_maps_cta_to_label(tmp_path):
+    # Real ResampledDataInNifti convention: subjectNNN_CTA.nii.gz <-> subjectNNN_label.seg.nrrd
+    imgs, labs = tmp_path / "images", tmp_path / "masks"
+    _touch(imgs / "subject001_CTA.nii.gz")
+    _touch(labs / "subject001_label.seg.nrrd")
+    cases = pair_cases(imgs, labs, image_glob="*_CTA.nii.gz",
+                       image_suffix="_CTA", label_template="{case_id}_label.seg.nrrd")
+    assert len(cases) == 1
+    assert cases[0].case_id == "subject001"
+    assert cases[0].image_path == imgs / "subject001_CTA.nii.gz"
+    assert cases[0].label_path == labs / "subject001_label.seg.nrrd"
+
+
 def test_missing_label_raises(tmp_path):
     imgs, labs = tmp_path / "img", tmp_path / "lab"
     _touch(imgs / "subject001.mha")

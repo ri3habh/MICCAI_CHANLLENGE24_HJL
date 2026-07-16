@@ -22,7 +22,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--resources", default="resources")
     p.add_argument("--device", choices=["cpu", "cuda"], default="cuda")
     p.add_argument("--image-glob", default="*.mha")
-    p.add_argument("--label-template", default="{stem}.mha")
+    p.add_argument("--label-template", default="{stem}.mha",
+                   help="Label filename from '{stem}' (image name minus ext) or '{case_id}' "
+                        "(stem minus --image-suffix).")
+    p.add_argument("--image-suffix", default="",
+                   help="Suffix stripped from the image stem to form {case_id}, "
+                        "e.g. '_CTA' so subject001_CTA -> case_id subject001.")
     p.add_argument("--weak-threshold", type=float, default=0.80)
     p.add_argument("--limit", type=int, default=None, help="Only process the first N cases (smoke test).")
     p.add_argument("--preflight", action="store_true", help="Run checks and exit.")
@@ -75,7 +80,7 @@ def preflight(args) -> int:
 
     try:
         cases = pair_cases(Path(args.images), Path(args.labels),
-                           args.image_glob, args.label_template)
+                           args.image_glob, args.label_template, args.image_suffix)
     except FileNotFoundError as e:
         print(f"FAIL: pairing: {e}")
         return 4
@@ -102,7 +107,7 @@ def run(args) -> int:
     device = torch.device(args.device)
 
     cases = pair_cases(Path(args.images), Path(args.labels),
-                       args.image_glob, args.label_template)
+                       args.image_glob, args.label_template, args.image_suffix)
     if args.limit:
         cases = cases[: args.limit]
 
