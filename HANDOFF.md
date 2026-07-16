@@ -1,14 +1,20 @@
 # Running the AortaSeg24 Validation (coworker guide)
 
 You need: a machine with an NVIDIA GPU (e.g. RTX 4090), Docker, and the NVIDIA
-Container Toolkit (so `--gpus all` works). You do **not** need Python, nnU-Net,
-or any model download — the weights are already inside the image.
+Container Toolkit (so `--gpus all` works). For the one-time build, the machine
+also needs to reach Docker Hub to pull the CUDA PyTorch base image (~5 GB).
+You do **not** need to set up Python or nnU-Net yourself — the build handles it.
 
-## 0. Load the image
-You received `aortaseg-validate.tar.gz`. Load it:
+You received: this **repo** and the **weights zip** (`resources...`, ~3.2 GB).
+
+## 0. Build the image (one time, ~10-20 min)
+From the repo root, point the script at the weights zip and run it:
 ```
-docker load -i aortaseg-validate.tar.gz
+WEIGHTS_ZIP=/ABS/PATH/to/weights.zip ./build_bundle.sh
 ```
+This unpacks the weights, builds the `aortaseg-validate` image (weights baked
+in), and runs its unit tests to confirm the image is sane. When it prints
+`DONE. Image 'aortaseg-validate' is built`, you're ready. You only do this once.
 
 ## 1. Point at your data
 This is the `ResampledDataInNifti` dataset: 100 CTAs and their masks in two folders:
@@ -33,8 +39,22 @@ docker run --rm --gpus all \
 It must print `preflight PASSED`. If not, fix what it reports (GPU not visible,
 wrong folder, filename mismatch) before continuing.
 
+## 2b. Smoke-test 2 cases first (a few minutes)
+Before the multi-hour run, prove it end-to-end on 2 cases by adding `--limit 2`
+(drop `--preflight`, keep everything else):
+```
+docker run --rm --gpus all \
+  -v /ABS/PATH/ResampledDataInNifti/images:/data/images \
+  -v /ABS/PATH/ResampledDataInNifti/masks:/data/labels \
+  -v /ABS/PATH/out:/out \
+  aortaseg-validate --limit 2 \
+    --images /data/images --labels /data/labels --outdir /out \
+    --image-glob "*_CTA.nii.gz" --image-suffix "_CTA" --label-template "{case_id}_label.seg.nrrd"
+```
+Open `out/results/summary.md` — if 2 cases scored with sane numbers, continue.
+
 ## 3. Run the full batch (hours — it prints progress + ETA)
-Same command, drop `--preflight`:
+Same command, drop `--limit 2`:
 ```
 docker run --rm --gpus all \
   -v /ABS/PATH/ResampledDataInNifti/images:/data/images \

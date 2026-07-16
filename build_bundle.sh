@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 #
-# build_bundle.sh — one-shot: unpack weights -> build the GPU Docker image ->
-# (optionally) test it -> export the shippable tarball for the coworker's 4090.
+# build_bundle.sh — unpack weights -> build the GPU Docker image -> test it.
+# Optionally also export a shippable tarball (EXPORT_TARBALL=1).
 #
-# Run from the repo root in Git Bash:
-#     ./build_bundle.sh
+# Typical use (build on the GPU machine, then run it there — see HANDOFF.md):
+#     WEIGHTS_ZIP=/path/to/weights.zip ./build_bundle.sh
 #
-# Requires: Docker installed (a GPU is NOT needed to BUILD — only to run later).
-# The build downloads the CUDA PyTorch base image (~5 GB) the first time, and the
-# final tarball is large (weights are baked in), so expect ~8-12 GB out.
+# Requires: Docker installed + network access to pull the CUDA PyTorch base
+# image (~5 GB) the first time. A GPU is NOT needed to BUILD — only to run later.
+#
+# EXPORT_TARBALL=1 additionally does `docker save | gzip` to ship a pre-built
+# image to a machine that can't build (needs ~8-12 GB free for the tarball).
 set -euo pipefail
 
 # --- config (override by exporting these before running) --------------------
@@ -17,6 +19,7 @@ ZIP="${WEIGHTS_ZIP:-/c/Users/Rishabh/Downloads/批量下载-resources等45个文
 IMAGE="${IMAGE_TAG:-aortaseg-validate}"
 OUT_TARBALL="${OUT_TARBALL:-$REPO_ROOT/aortaseg-validate.tar.gz}"
 RUN_INIMAGE_TESTS="${RUN_INIMAGE_TESTS:-1}"   # set to 0 to skip the sanity test
+EXPORT_TARBALL="${EXPORT_TARBALL:-0}"         # set to 1 to also save a shippable tarball
 
 RESENCL="$REPO_ROOT/resources/Dataset040_Aortaseg24/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/dataset.json"
 
@@ -49,7 +52,7 @@ done
 echo "      OK: all 6 ensemble checkpoints present."
 
 # --- 2. build the GPU image (weights + code baked in) -----------------------
-echo "[2/3] docker build -f Dockerfile.validation -t $IMAGE ."
+echo "[2] docker build -f Dockerfile.validation -t $IMAGE ."
 docker build -f Dockerfile.validation -t "$IMAGE" "$REPO_ROOT"
 
 if [ "$RUN_INIMAGE_TESTS" = "1" ]; then
@@ -57,14 +60,14 @@ if [ "$RUN_INIMAGE_TESTS" = "1" ]; then
     docker run --rm --entrypoint python "$IMAGE" -m pytest -q
 fi
 
-# --- 3. export the shippable tarball ----------------------------------------
-echo "[3/3] docker save $IMAGE -> $OUT_TARBALL (this takes a while)"
-docker save "$IMAGE" | gzip > "$OUT_TARBALL"
+# --- 3. (optional) export a shippable tarball -------------------------------
+if [ "$EXPORT_TARBALL" = "1" ]; then
+    echo "[3] docker save $IMAGE -> $OUT_TARBALL (this takes a while)"
+    docker save "$IMAGE" | gzip > "$OUT_TARBALL"
+    echo "      wrote $OUT_TARBALL ($(ls -lh "$OUT_TARBALL" | awk '{print $5}'))"
+fi
 
 echo
-echo "DONE."
-echo "  Bundle:  $OUT_TARBALL"
-ls -lh "$OUT_TARBALL" | awk '{print "  Size:    "$5}'
-echo
-echo "Send $OUT_TARBALL and HANDOFF.md to your coworker."
-echo "On the 4090:  docker load -i $(basename "$OUT_TARBALL")  then follow HANDOFF.md."
+echo "DONE. Image '$IMAGE' is built and its unit tests pass."
+echo "Next: run preflight, then the batch (see HANDOFF.md, section 3-4)."
+echo "Smoke-test 2 cases first with --limit 2 before the full run."
