@@ -27,18 +27,31 @@ def _norm(s: str) -> str:
     return "".join(ch for ch in s.lower() if ch.isalnum())
 
 
-# Known source names / synonyms per canonical vessel. Extend after inspecting the
-# real dataset.json in Step 6. abdominal_aorta may match several aortic-zone classes.
+# Source names per canonical vessel, verified against the real AortaSeg24
+# dataset.json (Dataset040_Aortaseg24, 24-class SVS aortic-zone scheme).
+# The exact challenge class names come first; generic synonyms follow as fallbacks.
+#
+# Decisions baked in here:
+#  - abdominal_aorta = infrarenal aorta only = "Zone9" (label 17). The other
+#    abdominal zones (6/7/8, celiac->renal) are intentionally NOT included; if the
+#    med team later wants the full anatomical abdominal aorta, add "Zone6"/"Zone7"/
+#    "Zone8" here (they will merge into abdominal_aorta via many-to-one remap).
+#  - common iliac = Zone10 (R/L), external iliac = Zone11 (R/L), per the SVS
+#    aortoiliac zone extension the challenge uses.
+#  - the internal-iliac class names contain a source typo ("Internal lliac"); the
+#    exact string is included so it matches.
 VESSEL_ALIASES: dict[str, list[str]] = {
-    "abdominal_aorta": ["abdominal aorta", "abdominal_aorta", "aorta abdominal"],
-    "left_renal": ["left renal", "left renal artery", "left_renal"],
-    "right_renal": ["right renal", "right renal artery", "right_renal"],
-    "left_common_iliac": ["left common iliac", "left_common_iliac"],
-    "right_common_iliac": ["right common iliac", "right_common_iliac"],
-    "left_internal_iliac": ["left internal iliac", "left_internal_iliac"],
-    "right_internal_iliac": ["right internal iliac", "right_internal_iliac"],
-    "left_external_iliac": ["left external iliac", "left_external_iliac"],
-    "right_external_iliac": ["right external iliac", "right_external_iliac"],
+    "abdominal_aorta": ["Zone9", "abdominal aorta", "abdominal_aorta"],
+    "left_renal": ["Left Renal Artery", "left renal", "left_renal"],
+    "right_renal": ["Right Renal Artery", "right renal", "right_renal"],
+    "left_common_iliac": ["Zone10 L", "left common iliac", "left_common_iliac"],
+    "right_common_iliac": ["Zone10 R", "right common iliac", "right_common_iliac"],
+    "left_internal_iliac": ["Left Internal lliac Artery", "Left Internal Iliac Artery",
+                            "left internal iliac", "left_internal_iliac"],
+    "right_internal_iliac": ["Right Internal lliac Artery", "Right Internal Iliac Artery",
+                             "right internal iliac", "right_internal_iliac"],
+    "left_external_iliac": ["Zone11 L", "left external iliac", "left_external_iliac"],
+    "right_external_iliac": ["Zone11 R", "right external iliac", "right_external_iliac"],
 }
 
 # Ground-truth integer -> canonical index. VERIFY against a real label file (Step 6);
